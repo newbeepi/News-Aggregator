@@ -1,0 +1,86 @@
+version: "0.2"
+services:
+  postgres:
+    image: postgres:latest
+    env_file: ".env"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker-init/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgresuser -d newsdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 4G
+    networks:
+      - news_aggregator_network
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/root/redis
+    env_file: ".env"
+    networks:
+      - news_aggregator_network
+  worker:
+    build: .
+    command: celery -A celery_tasks worker --loglevel=info -P solo
+    env_file: ".env"
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - news_aggregator_network
+  beat:
+    build: .
+    command: celery -A celery_tasks beat -s /app/news_aggregator/celerybeat-schedule/celerybeat --loglevel=info
+    env_file: ".env"
+    depends_on:
+      - redis
+      - worker
+      - postgres
+    networks:
+      - news_aggregator_network
+  dashboard:
+    build: .
+    command: celery -A celery flower
+    ports:
+      - 5556:5555
+    env_file: ".env"
+    depends_on:
+      - redis
+      - worker
+    networks:
+      - news_aggregator_network
+  webserver:
+    build: .
+    command: fastapi run main.py
+    depends_on:
+      - worker
+    networks:
+      - news_aggregator_network
+    env_file: ".env"
+    ports:
+      - 8000:8000
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  news_aggregator_network:
