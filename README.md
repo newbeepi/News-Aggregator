@@ -20,4 +20,6 @@ This command will run all containers and for the first time may take a while to 
 |http://localhost:5556/|Flower web app for monitoring your worker and tasks|
 |http://localhost:8000/docs|Fast API web app to test News Aggregator       |
 
+## How to get data from your code or using cli
 
+If you needto make a request to this data in your code or in any other way just make a simple get request to localhost:8000/get_relevant_news
